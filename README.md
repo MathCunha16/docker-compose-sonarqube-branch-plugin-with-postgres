@@ -1,14 +1,26 @@
-# SonarQube with PostgreSQL (Docker Compose)
+# SonarQube with PostgreSQL + Community Branch Plugin (Docker Compose)
 
-This repository provides an evergreen, persistent Docker Compose setup to run the **SonarQube Community Edition** with a dedicated **PostgreSQL** database.
+This repository provides a persistent Docker Compose setup to run **SonarQube Community Edition** with the **Community Branch Plugin** and a dedicated **PostgreSQL** database.
 
-This configuration is designed for developers who want a reliable, local SonarQube instance. It is "evergreen," meaning it uses floating tags (like `community` and `latest`) to pull the newest compatible images on first setup.
+This configuration extends the standard SonarQube Community Edition by adding multi-branch analysis support through the [SonarQube Community Branch Plugin](https://github.com/mc1arke/sonarqube-community-branch-plugin). This setup enables you to analyze multiple branches and pull requests without requiring a commercial SonarQube license.
 
 ## Features
 
-* **Stable Database:** Uses a dedicated PostgreSQL database, as recommended by SonarSource for persistent data storage.
+* **Multi-Branch Support:** Includes the Community Branch Plugin, enabling branch and pull request analysis in the free Community Edition.
+* **Stable Database:** Uses a dedicated PostgreSQL 15 database, as recommended by SonarSource for persistent data storage.
 * **Persistent Storage:** All data (database, SonarQube data, extensions, logs) is stored in named Docker volumes, so your data survives container restarts and image updates.
 * **Isolated Networking:** Both services run on a custom bridge network, allowing them to communicate securely by name.
+* **Ready-to-Use:** Just run `docker-compose up` and start analyzing your branches!
+
+## What is the Community Branch Plugin?
+
+The [SonarQube Community Branch Plugin](https://github.com/mc1arke/sonarqube-community-branch-plugin) is an open-source extension that adds branch and pull request analysis capabilities to SonarQube Community Edition. These features are normally only available in the commercial Developer Edition and above.
+
+**Key capabilities:**
+- Analyze multiple branches in a single project
+- View pull request analysis and decoration
+- Compare branches with the main branch
+- Track code quality across different branches
 
 ## Prerequisites
 
@@ -20,17 +32,20 @@ This configuration is designed for developers who want a reliable, local SonarQu
 ## How to Use
 
 1.  **Download:**
-    Clone this repository or download the `docker-compose.yml` file into a new directory (for example, `~/docker/sonarqube`).
+    Clone this repository or download the `docker-compose.yml` file into a new directory (for example, `~/docker/sonarqube-branch`).
 
 2.  **Start the Services:**
     From inside that directory, run:
     ```bash
     docker-compose up -d
     ```
-    This will pull the latest images (if you don't have them) and start the containers.
+    This will pull the images (if you don't have them) and start the containers.
 
 3.  **Access SonarQube:**
-    Wait 1-2 minutes for the server to initialize. You can check the logs with `docker-compose logs -f sonarqube`.
+    Wait 1-2 minutes for the server to initialize. You can check the logs with:
+    ```bash
+    docker-compose logs -f sonarqube
+    ```
 
     Once it's running, access the dashboard in your browser at:
     **[http://localhost:9000](http://localhost:9000)**
@@ -38,7 +53,10 @@ This configuration is designed for developers who want a reliable, local SonarQu
 4.  **Login:**
     * **Default Username:** `admin`
     * **Default Password:** `admin`
+    
     (You will be prompted to change the password on first login).
+
+That's it! Your SonarQube instance with branch analysis support is ready to use.
 
 ---
 
@@ -48,24 +66,26 @@ This `docker-compose.yml` is designed to be a flexible template. Here is how you
 
 ### 1. `sonarqube-db` (PostgreSQL Service)
 
-* **`image: postgres:latest`**
-    This file uses `postgres:latest` to always get the newest stable PostgreSQL version. If you prefer to lock into a specific major version, you can change this.
-    * **Example:** `image: postgres:16` or `image: postgres:15`
+* **`image: postgres:15`**
+    This configuration uses PostgreSQL 15, which is well-tested and stable with SonarQube. You can change this to other versions if needed.
+    * **Example:** `image: postgres:16` or `image: postgres:14`
 
 * **`environment:`**
     You can change the `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `POSTGRES_DB` values.
     **If you change these**, you **must** update the `SONAR_JDBC_...` variables in the `sonarqube` service to match.
 
 * **`ports: - "5433:5432"`**
-    This line is **optional**. It exposes the database to your host PC on port `5433`. This is only useful if you want to connect to the database with an external tool (like DBeaver or pgAdmin). SonarQube does *not* need this to function, so you can safely remove it for better security.
+    This line is **optional**. It exposes the database to your host PC on port `5433`. This is only useful if you want to connect to the database with an external tool (like DBeaver or pgAdmin). SonarQube itself connects via the internal Docker network and doesn't need this port exposed.
 
 ### 2. `sonarqube` (SonarQube Application)
 
-* **`image: sonarqube:community`**
-    This is the most important setting. The tag determines your SonarQube version.
-    * **`sonarqube:community` (Recommended Default):** This tag points to the **latest Community Edition**. It is updated frequently and avoids the "version is no longer active" error.
-    * **`sonarqube:lts-community`:** Use this tag if you specifically want the **Long-Term Support (LTS)** version, which is more stable and updated less frequently.
-    * **`sonarqube:X.X.X-community`:** You can "pin" a specific version (for example, `sonarqube:25.10.0.114319-community`) if you need to guarantee a specific release.
+* **`image: sonarqube:25.10.0.114319-community`**
+    This is the most important setting. The tag determines your SonarQube version. The current configuration uses a specific version for stability and reproducibility.
+    
+    **Available options:**
+    * **`sonarqube:community`** - Always pulls the latest Community Edition (good for development, may introduce breaking changes)
+    * **`sonarqube:lts-community`** - Long-Term Support version (recommended for production, more stable)
+    * **`sonarqube:X.X.X-community`** - Specific version (like the current `25.10.0.114319-community`) for reproducible environments
 
 * **`ports: - "9000:9000"`**
     If you already have a service on your host using port `9000`, you can change the *host* port (the left side).
@@ -73,48 +93,174 @@ This `docker-compose.yml` is designed to be a flexible template. Here is how you
 
 ---
 
+## Configuring Branch Analysis
+
+Once your SonarQube instance is running, you can analyze branches and pull requests using your preferred scanner. Here are examples for common scenarios:
+
+### Branch Analysis
+
+**Maven:**
+```bash
+mvn sonar:sonar \
+  -Dsonar.projectKey=my-project \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=YOUR_TOKEN \
+  -Dsonar.branch.name=feature/my-branch
+```
+
+**Gradle:**
+```bash
+./gradlew sonar \
+  -Dsonar.projectKey=my-project \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=YOUR_TOKEN \
+  -Dsonar.branch.name=feature/my-branch
+```
+
+### Pull Request Analysis
+
+**Maven:**
+```bash
+mvn sonar:sonar \
+  -Dsonar.projectKey=my-project \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=YOUR_TOKEN \
+  -Dsonar.pullrequest.key=123 \
+  -Dsonar.pullrequest.branch=feature/my-branch \
+  -Dsonar.pullrequest.base=main
+```
+
+**Gradle:**
+```bash
+./gradlew sonar \
+  -Dsonar.projectKey=my-project \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=YOUR_TOKEN \
+  -Dsonar.pullrequest.key=123 \
+  -Dsonar.pullrequest.branch=feature/my-branch \
+  -Dsonar.pullrequest.base=main
+```
+
+### CI/CD Integration
+
+**GitHub Actions Example:**
+```yaml
+- name: SonarQube Scan
+  env:
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    SONAR_HOST_URL: http://localhost:9000
+  run: |
+    mvn sonar:sonar \
+      -Dsonar.projectKey=my-project \
+      -Dsonar.branch.name=${{ github.ref_name }}
+```
+
+For detailed configuration instructions for different CI/CD platforms, refer to the [plugin documentation](https://github.com/mc1arke/sonarqube-community-branch-plugin#usage).
+
+---
+
 ## Updating Your Stack
 
-Because this setup uses floating tags, you can update your SonarQube and PostgreSQL images by running:
+Because this setup uses specific version tags, you can update SonarQube and PostgreSQL by modifying the image versions in `docker-compose.yml`:
 
 ```bash
-# 1. Pull the newest images defined in your compose file
+# 1. Stop the services
+docker-compose down
+
+# 2. Edit docker-compose.yml and update the image tags
+# For example: sonarqube:25.10.0.114319-community → sonarqube:26.0.0.123456-community
+
+# 3. Pull the new images
 docker-compose pull
 
-# 2. Re-create the containers with the new images
+# 4. Start the services with new images
 docker-compose up -d
 ```
+
 The new containers will start and connect to your existing data volumes.
+
+---
 
 ## Troubleshooting
 
 ### "The version of SonarQube you are trying to upgrade from is too old"
 
-This error can happen if you `docker-compose pull` after a long time. SonarQube cannot always jump from a very old version (like 9.x) directly to a very new one (like 11.x) while migrating the database.
+This error can happen when jumping between major versions. SonarQube has upgrade path limitations and cannot always jump from very old versions (like 9.x) directly to newer ones (like 11.x+) while migrating the database.
 
 **Fix (This will delete all your SonarQube analysis data):**
-1.  Stop and remove all containers **AND** volumes.
-    ```bash
-    docker-compose down -v
-    ```
-2.  Start fresh. This will create a new, empty database for the new version.
-    ```bash
-    docker-compose up -d
-    ```
+```bash
+# Stop and remove all containers AND volumes
+docker-compose down -v
+
+# Start fresh with the new version
+docker-compose up -d
+```
+
+### Branch Analysis Not Working
+
+If branch analysis features are not available, check the logs for any errors:
+
+```bash
+docker-compose logs sonarqube | grep -i "branch\|error"
+```
+
+Make sure you're using the correct scanner parameters:
+- For branches: use `sonar.branch.name`
+- For pull requests: use `sonar.pullrequest.key`, `sonar.pullrequest.branch`, and `sonar.pullrequest.base`
+
+### Container Fails to Start
+
+Check the logs to identify the issue:
+```bash
+docker-compose logs -f sonarqube
+docker-compose logs -f sonarqube-db
+```
+
+Common issues:
+- **Insufficient memory:** SonarQube requires at least 2GB of RAM
+- **Port conflicts:** Ensure ports 9000 and 5433 are not in use by other services
+- **Database connection:** Verify PostgreSQL is running and credentials match between the two services
 
 ---
 
 ## Useful Links & Documentation
 
+### SonarQube Community Branch Plugin
+* **Plugin GitHub Repository:** [github.com/mc1arke/sonarqube-community-branch-plugin](https://github.com/mc1arke/sonarqube-community-branch-plugin)
+* **Pre-built Docker Image (Alternative):** [hub.docker.com/r/mc1arke/sonarqube-with-community-branch-plugin](https://hub.docker.com/r/mc1arke/sonarqube-with-community-branch-plugin)
+* **Plugin Usage Guide:** [github.com/mc1arke/sonarqube-community-branch-plugin#usage](https://github.com/mc1arke/sonarqube-community-branch-plugin#usage)
+
+### SonarQube Official Resources
 * **SonarQube Downloads:** [sonarsource.com/products/sonarqube/downloads/](https://www.sonarsource.com/products/sonarqube/downloads/)
-    * (Good for seeing what the current LTS and Latest versions are)
 * **SonarQube on Docker Hub:** [hub.docker.com/_/sonarqube](https://hub.docker.com/_/sonarqube)
-    * **SonarQube Tags:** [hub.docker.com/_/sonarqube/tags](https://hub.docker.com/_/sonarqube/tags) (See all available versions)
+  * **SonarQube Tags:** [hub.docker.com/_/sonarqube/tags](https://hub.docker.com/_/sonarqube/tags)
+* **SonarQube Docker Installation Guide:** [docs.sonarsource.com/sonarqube-server/latest/server-installation/from-docker-image](https://docs.sonarsource.com/sonarqube-server/latest/server-installation/from-docker-image/)
+
+### Database & Infrastructure
 * **PostgreSQL on Docker Hub:** [hub.docker.com/_/postgres](https://hub.docker.com/_/postgres)
-    * **PostgreSQL Tags:** [hub.docker.com/_/postgres/tags](https://hub.docker.com/_/postgres/tags)
-* **SonarQube Installation Docs (Docker):**
-  *  [docs.sonarsource.com/sonarqube-server/latest/server-installation/from-docker-image](https://docs.sonarsource.com/sonarqube-server/latest/server-installation/from-docker-image/)
+  * **PostgreSQL Tags:** [hub.docker.com/_/postgres/tags](https://hub.docker.com/_/postgres/tags)
 * **Docker Compose File Reference:** [docs.docker.com/compose/compose-file/](https://docs.docker.com/compose/compose-file/)
+
+---
+
+## Differences from Standard SonarQube Setup
+
+This repository differs from the standard [SonarQube-with-PostgreSQL](https://github.com/MathCunha16/SonarQube-with-PostgreSQL) setup in the following ways:
+
+| Feature | Standard Setup | This Setup (with Branch Plugin) |
+|---------|---------------|----------------------------------|
+| **Branch Analysis** | ❌ Not supported | ✅ Supported |
+| **PR Analysis** | ❌ Not supported | ✅ Supported |
+| **Best For** | Single branch analysis | Multi-branch projects, CI/CD pipelines |
+
+**When to use each:**
+- **Use the [standard setup](https://github.com/MathCunha16/SonarQube-with-PostgreSQL)** if you only need to analyze a single branch (typically `main` or `master`)
+- **Use this setup** if you need to analyze multiple branches, compare them, or analyze pull requests
+
+---
+
 ## License
 
 This project is licensed under the **MIT License**.
+
+The SonarQube Community Branch Plugin is licensed under the **LGPL-3.0 License**. See the [plugin repository](https://github.com/mc1arke/sonarqube-community-branch-plugin/blob/master/LICENSE) for details.
