@@ -1,6 +1,6 @@
 services:
   sonarqube-db:
-    image: postgres:15 # You can use other version if you want to.
+    image: postgres:15-alpine # You can use other version if you want to.
     container_name: sonarqube-db
     environment:
       - POSTGRES_USER=sonarqube
@@ -14,7 +14,8 @@ services:
         - sonarqube-db:/var/lib/postgresql/data
 
   sonarqube:
-    image: sonarqube:25.10.0.114319-community # You can switch the version as well if you want, check the official documentation for more info
+    image: mc1arke/sonarqube-with-community-branch-plugin:25.9.0.112764-community
+ # You can switch the version as well if you want, check the official documentation for more info
     container_name: sonarqube
     ports:
       - "9000:9000"
